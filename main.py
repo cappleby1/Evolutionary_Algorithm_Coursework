@@ -129,13 +129,30 @@ def run():
                  .evaluate())
 
     for i in range(generations):
-        population = population.evolve(evolution)
-        if population.current_best is not None:
-            print("i =", i, " best =", population.current_best.fitness, " worst =", population.current_worst.fitness)
-        else:
-            print("i =", i, " No valid individuals in the population!")
 
-    draw(population[0].chromosome).save("solution.png")
+        total = 0
+
+        population = population.evolve(evolution)
+
+        for j in population:
+            total += j.fitness
+
+        average = total / len(population)
+
+        population = population.evolve(evolution)
+
+        print("generation =", i, " best =", population.current_best.fitness, " worst =",
+
+              population.current_worst.fitness, "average=", average)
+
+    best = population[0]
+
+    for i in population:
+
+        if i.fitness > best.fitness:
+            best = i
+
+    draw(best.chromosome).save("solution.png")
 
 
 def read_config(path):
