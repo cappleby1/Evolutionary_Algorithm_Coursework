@@ -130,12 +130,6 @@ def run():
 
     for i in range(generations):
         population = population.evolve(evolution)
-        print("i =", i, " best =", population.current_best.fitness, " worst =",
-              population.current_worst.fitness)
-    draw(population[0].chromosome).save("solution.png")
-
-    for i in range(generations):
-        population = population.evolve(evolution)
         if population.current_best is not None:
             print("i =", i, " best =", population.current_best.fitness, " worst =", population.current_worst.fitness)
         else:
