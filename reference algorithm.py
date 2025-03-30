@@ -2,6 +2,8 @@ import random
 from PIL import Image, ImageDraw, ImageChops
 from evol import Population, Evolution
 
+# THIS IS THE ORIGINAL CODE GIVEN FROM WHICH I MADE CHANGES - KEPT PURELY FOR REFERENCE
+
 POLYGON_COUNT = 10
 MAX = 255 * 200 * 200
 TARGET = Image.open("8b.png")
@@ -47,14 +49,16 @@ def combine(*parents):
     return [a if random.random() < 0.5 else b for a, b in zip(*parents)]
 
 
+# Checks how close to target image the solution is
 def evaluate(solution):
     image = draw(solution)
-    diff = ImageChops.difference(image, TARGET)
-    hist = diff.convert("L").histogram()
-    count = sum(i * n for i, n in enumerate(hist))
-    return (MAX - count) / MAX
+    diff = ImageChops.difference(image, TARGET)  # Calculates the pixel-wise absolute difference
+    hist = diff.convert("L").histogram()  # Converts to greyscale & then histogram
+    count = sum(i * n for i, n in enumerate(hist))  # Computes the weighted sum of pixel differences
+    return (MAX - count) / MAX  # Creates fitness score
 
 
+# Creates solution image
 def draw(solution):
     image = Image.new("RGB", (200, 200))
     canvas = ImageDraw.Draw(image, "RGBA")

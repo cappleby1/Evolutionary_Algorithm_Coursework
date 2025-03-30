@@ -4,8 +4,35 @@ from evol import Population, Evolution
 
 POLYGON_COUNT = 50
 MAX = 255 * 200 * 200
-TARGET = Image.open("8c.png")
-TARGET.load()  # read image and close the file
+TARGET = Image.open('8a.png')
+TARGET.load()
+
+def menu():
+    image = input("Enter name of file to use as target (8a.png, 8b.png, 8c.png): ")
+
+    match image:
+        case "8a.png":
+            TARGET = Image.open("8a.png")
+        case "8b.png":
+            TARGET = Image.open("8b.png")
+        case "8c.png":
+            TARGET = Image.open("8c.png")
+        case _:
+            print("Invalid file name entered. Please select one of the valid options (8a.png, 8b.png, 8c.png).")
+            return None
+
+    TARGET.load()
+
+    generations = int(input("Enter number of generations: "))
+    pop_size = int(input("Enter population size: "))
+
+    random_seed = str(input("Would you like a random seed? (y/n): "))
+    if random_seed == "y":
+        seed = random.randint(1, MAX)
+    else:
+        seed = 35
+
+    return TARGET, generations, pop_size, seed
 
 
 def make_polygon():
@@ -17,6 +44,7 @@ def make_polygon():
     return [(R, G, B, A), (x1, y1), (x2, y2), (x3, y3), (x4, y4)]
 
 
+# Create image for size required
 def initialise():
     return [make_polygon() for i in range(POLYGON_COUNT)]
 
@@ -70,14 +98,16 @@ def combine(*parents):
     return [a if random.random() < 0.5 else b for a, b in zip(*parents)]
 
 
+# Checks how close solution is to the target image
 def evaluate(solution):
     image = draw(solution)
-    diff = ImageChops.difference(image, TARGET)
-    hist = diff.convert("L").histogram()
-    count = sum(i * n for i, n in enumerate(hist))
-    return (MAX - count) / MAX
+    diff = ImageChops.difference(image, TARGET)  # Calculates pixel-wise absolute difference between images
+    hist = diff.convert("L").histogram()  # Converts to greyscale & histogram of pixel intensity
+    count = sum(i * n for i, n in enumerate(hist))  # Computes weighted sum of pixel differences
+    return (MAX - count) / MAX  # Normalise to fitness value
 
 
+# Creates solution image
 def draw(solution):
     image = Image.new("RGB", (200, 200))
     canvas = ImageDraw.Draw(image, "RGBA")
@@ -86,32 +116,32 @@ def draw(solution):
     return image
 
 
-def run(generations=1000, population_size=100, seed=35):
-    # for reproducibility
+def run():
+    TARGET, generations, pop_size, seed = menu()
+
     random.seed(seed)
 
     # initialization
-    population = Population.generate(initialise, evaluate, population_size, maximize=True, concurrent_workers=4)
+    population = Population.generate(initialise, evaluate, pop_size, maximize=True, concurrent_workers=4)
     evolution = (Evolution().survive(fraction=0.5)
                  .breed(parent_picker=select, combiner=combine)
-                 .mutate(mutate_function=mutate, rate=0.2)
+                 .mutate(mutate_function=mutate, rate=0.1)
                  .evaluate())
 
     for i in range(generations):
-        total = 0
         population = population.evolve(evolution)
-        for j in population:
-            total += j.fitness
-        average = total / len(population)
-        population = population.evolve(evolution)
-        print("generation =", i, " best =", population.current_best.fitness, " worst =",
-              population.current_worst.fitness, "average=", average)
+        print("i =", i, " best =", population.current_best.fitness, " worst =",
+              population.current_worst.fitness)
+    draw(population[0].chromosome).save("solution.png")
 
-    best = population[0]
-    for i in population:
-        if i.fitness > best.fitness:
-            best = i
-    draw(best.chromosome).save("solution.png")
+    for i in range(generations):
+        population = population.evolve(evolution)
+        if population.current_best is not None:
+            print("i =", i, " best =", population.current_best.fitness, " worst =", population.current_worst.fitness)
+        else:
+            print("i =", i, " No valid individuals in the population!")
+
+    draw(population[0].chromosome).save("solution.png")
 
 
 def read_config(path):
