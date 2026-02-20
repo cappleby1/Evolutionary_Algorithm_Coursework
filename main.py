@@ -5,14 +5,14 @@ from evol import Population, Evolution
 POLYGON_COUNT = 50
 MAX = 255 * 200 * 200
 
-image = input("Enter name of file to use as target (8a.png, 8b.png, 8c.png): ")
+image = input("Enter a, b or c to select targetb: ")
 
 match image:
-    case "8a.png":
+    case "a":
         TARGET = Image.open("8a.png")
-    case "8b.png":
+    case "b":
         TARGET = Image.open("8b.png")
-    case "8c.png":
+    case "c":
         TARGET = Image.open("8c.png")
     case _:
         print("Invalid file name entered. Please select one of the valid options (8a.png, 8b.png, 8c.png).")
