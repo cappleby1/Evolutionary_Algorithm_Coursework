@@ -17,7 +17,7 @@ def menu():
         case "c":
             TARGET = Image.open("8c.png")
         case _:
-            print("Invalid file name entered. Please select one of the valid options (8a.png, 8b.png, 8c.png).")
+            raise ValueError("Invalid selection. Choose a, b, or c.")
 
     TARGET.load()
 
