@@ -4,8 +4,11 @@ from evol import Population, Evolution
 
 POLYGON_COUNT = 50
 MAX = 255 * 200 * 200
-max_generations = 2000
 current_generation = 0
+max_generations = 2000
+best_fitness_so_far = 0
+generations_without_improvement = 0
+stagnation_threshold = 30  # e.g., 30 generations of no improvement
 
 def menu():
 
@@ -50,54 +53,57 @@ def initialise():
 
 
 def mutate(solution, rate):
-    chance = random.random()
+    global current_generation, max_generations
+    global best_fitness_so_far, generations_without_improvement
 
-    # shallow copy the solution list
     new_solution = solution[:]
 
-    # Cool mutation as generations increases - larger jumps to begin with then smaller
+    # --- Cooling ---
     progress = current_generation / max_generations
-    cooling = 0.999 ** current_generation   # exponential cooling
-    max_shift = max(1, int(10 * cooling))   # always at least 1
+    cooling = 0.999 ** current_generation  # exponential cooling
+    max_shift = max(1, int(10 * cooling))
 
-    if progress < 0.5:
-        cooling = 1
+    # Adaptive macro mutation: increase if no improvement
+    if generations_without_improvement >= 30:
+        macro_prob = 0.2          # 20% chance of big mutation
+        macro_shift = max_shift * 2
     else:
-        cooling = 1 - ((progress - 0.5) * 2)
+        macro_prob = 0.05         # normal 5%
+        macro_shift = max_shift
 
+    micro_mode = random.random() < 0.3    # 30% chance precision nudging
+    macro_mode = random.random() < macro_prob
+
+    chance = random.random()
+
+    # ----- Mutate points -----
     if chance < 0.5 and new_solution:
-        # choose index instead of object
         idx = random.randrange(len(new_solution))
-
-        # copy only the polygon we modify
         polygon = new_solution[idx]
-        new_polygon = polygon[:]  # shallow copy polygon
+        new_polygon = polygon[:]
 
         new_points = []
-        # decide mutation mode
-        micro_mode = random.random() < 0.3  # 30% chance of precision mutation
-
         for (x, y) in new_polygon[1:]:
             if random.random() < rate:
-                if micro_mode:
-                    # tiny refinement shift
-                    shift = 2
+                if macro_mode:
+                    shift = max(5, int(macro_shift))  # big jump
+                elif micro_mode:
+                    shift = 2  # small refinement
                 else:
-                    # normal cooling shift
-                    shift = max_shift
+                    shift = max_shift  # normal cooling-based mutation
 
                 x += random.randint(-shift, shift)
                 y += random.randint(-shift, shift)
 
-            # clamp to image boundaries
+            # Clamp coordinates
             x = max(0, min(200, x))
             y = max(0, min(200, y))
-
             new_points.append((x, y))
 
         new_polygon[1:] = new_points
         new_solution[idx] = new_polygon
 
+    # ----- Add/remove polygons -----
     elif chance < 0.7:
         if len(new_solution) < 100:
             new_solution.append(make_polygon())
@@ -110,8 +116,15 @@ def mutate(solution, rate):
         else:
             new_solution.append(make_polygon())
 
+    # ----- Shuffle / macro polygon move -----
     else:
         random.shuffle(new_solution)
+        # Rare: move a polygon to a new position
+        if new_solution and random.random() < 0.1:
+            idx = random.randrange(len(new_solution))
+            poly = new_solution.pop(idx)
+            new_pos = random.randrange(len(new_solution)+1)
+            new_solution.insert(new_pos, poly)
 
     return new_solution
 
@@ -143,49 +156,68 @@ def draw(solution):
 
 
 def run():
-    global max_generations, current_generation
+    global current_generation, max_generations
+    global best_fitness_so_far, generations_without_improvement
 
+    # --- Menu and seed ---
     TARGET, max_generations, pop_size, seed = menu()
-
     random.seed(seed)
 
-    # Checks how close solution is to the target image
+    # --- Fitness evaluation function ---
     def evaluate(solution):
         image = draw(solution)
-        diff = ImageChops.difference(image, TARGET)  # Calculates pixel-wise absolute difference between images
-        hist = diff.convert("L").histogram()  # Converts to greyscale & histogram of pixel intensity
-        count = sum(i * n for i, n in enumerate(hist))  # Computes weighted sum of pixel differences
-        return (MAX - count) / MAX  # Normalise to fitness value
+        diff = ImageChops.difference(image, TARGET)
+        hist = diff.convert("L").histogram()
+        count = sum(i * n for i, n in enumerate(hist))
+        return (MAX - count) / MAX
 
-    # initialization
-    population = Population.generate(initialise, evaluate, pop_size, maximize=True, concurrent_workers=8)
-    evolution = (Evolution().survive(fraction=0.5)
-                 .breed(parent_picker=select, combiner=combine)
-                 .mutate(mutate_function=mutate, rate=0.1, elitist=True)
-                 .evaluate(lazy=True))
-    
+    # --- Initialize population ---
+    population = Population.generate(
+        initialise,
+        evaluate,
+        pop_size,
+        maximize=True,
+        concurrent_workers=4
+    )
+
+    # --- Evolution pipeline ---
+    evolution = (
+        Evolution()
+        .survive(fraction=0.5)
+        .breed(parent_picker=select, combiner=combine)
+        .mutate(mutate_function=mutate, rate=0.1, elitist=True)
+        .evaluate(lazy=False)  # immediate evaluation
+    )
+
+    # --- Initialize stagnation tracking ---
+    best_fitness_so_far = 0
+    generations_without_improvement = 0
+
+    # --- Main loop ---
     for i in range(max_generations):
-
         current_generation = i
 
+        # Evolve population
         population = population.evolve(evolution)
 
-        total = sum(j.fitness for j in population)
-        average = total / len(population)
+        # Track best fitness and stagnation
+        best = population.current_best.fitness
+        if best > best_fitness_so_far:
+            best_fitness_so_far = best
+            generations_without_improvement = 0
+        else:
+            generations_without_improvement += 1
 
-        print("generation =", i,
-            "best =", population.current_best.fitness,
-            "worst =", population.current_worst.fitness,
-            "average =", average)
+        average = sum(j.fitness for j in population) / len(population)
+        worst = population.current_worst.fitness
 
-    best = population[0]
+        # Normal print (no f-strings)
+        print("generation =", i, "best =", best, "worst =", worst, "average =", average)
 
-    for i in population:
-
-        if i.fitness > best.fitness:
-            best = i
-
-    draw(best.chromosome).save("solution.png")
+    # --- Save final best solution ---
+    best_solution = max(population, key=lambda x: x.fitness)
+    draw(best_solution.chromosome).save("solution.png")
+    print("Best solution saved with fitness =", best_solution.fitness)
 
 
 def read_config(path):
