@@ -4,23 +4,23 @@ from evol import Population, Evolution
 
 POLYGON_COUNT = 50
 MAX = 255 * 200 * 200
-
-image = input("Enter a, b or c to select target: ")
-
-match image:
-    case "a":
-        TARGET = Image.open("8a.png")
-    case "b":
-        TARGET = Image.open("8b.png")
-    case "c":
-        TARGET = Image.open("8c.png")
-    case _:
-        print("Invalid file name entered. Please select one of the valid options (8a.png, 8b.png, 8c.png).")
-
-TARGET.load()
+TARGET = Image.open("8a.png")
 
 def menu():
 
+    image = input("Enter a, b or c to select target: ")
+
+    match image:
+        case "a":
+            TARGET = Image.open("8a.png")
+        case "b":
+            TARGET = Image.open("8b.png")
+        case "c":
+            TARGET = Image.open("8c.png")
+        case _:
+            print("Invalid file name entered. Please select one of the valid options (8a.png, 8b.png, 8c.png).")
+
+    TARGET.load()
 
     generations = int(input("Enter number of generations: "))
     pop_size = int(input("Enter population size: "))
