@@ -5,7 +5,7 @@ from evol import Population, Evolution
 POLYGON_COUNT = 50
 MAX = 255 * 200 * 200
 
-image = input("Enter a, b or c to select targetb: ")
+image = input("Enter a, b or c to select target: ")
 
 match image:
     case "a":
