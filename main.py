@@ -4,6 +4,8 @@ from evol import Population, Evolution
 
 POLYGON_COUNT = 50
 MAX = 255 * 200 * 200
+max_generations = 2000
+current_generation = 0
 
 def menu():
 
@@ -21,7 +23,7 @@ def menu():
 
     TARGET.load()
 
-    generations = int(input("Enter number of generations: "))
+    max_generations = int(input("Enter number of generations: "))
     pop_size = int(input("Enter population size: "))
 
     random_seed = str(input("Would you like a random seed? (y/n): "))
@@ -30,7 +32,7 @@ def menu():
     else:
         seed = 35
 
-    return TARGET, generations, pop_size, seed
+    return TARGET, max_generations, pop_size, seed
 
 
 def make_polygon():
@@ -48,48 +50,83 @@ def initialise():
 
 
 def mutate(solution, rate):
-    solution = copy.deepcopy(solution)
     chance = random.random()
-    if chance < 0.5:
-        # mutate points
-        polygon = random.choice(solution)
-        coords = [x for point in polygon[1:] for x in point]
-        coords = [x + (random.randint(-10, 10) if random.random() < rate else 0) for x in coords]
-        coords = [max(0, min(int(x), 200)) for x in coords]
-        polygon[1:] = list(zip(coords[::2], coords[1::2]))
 
-    # add polygon
-    elif 0.5 < chance < 0.7:
-        if len(solution) < 100:
-            solution.append(make_polygon())
-        else:
-            delete = random.randint(0, (len(solution) - 1))
-            solution.pop(delete)
+    # shallow copy the solution list
+    new_solution = solution[:]
 
-    # remove polygon
-    elif 0.7 < chance < 0.75:
-        if len(solution) > 0:
-            delete = random.randint(0, (len(solution) - 1))
-            solution.pop(delete)
+    # Cool mutation as generations increases - larger jumps to begin with then smaller
+    progress = current_generation / max_generations
+    cooling = 0.999 ** current_generation   # exponential cooling
+    max_shift = max(1, int(10 * cooling))   # always at least 1
+
+    if progress < 0.5:
+        cooling = 1
+    else:
+        cooling = 1 - ((progress - 0.5) * 2)
+
+    if chance < 0.5 and new_solution:
+        # choose index instead of object
+        idx = random.randrange(len(new_solution))
+
+        # copy only the polygon we modify
+        polygon = new_solution[idx]
+        new_polygon = polygon[:]  # shallow copy polygon
+
+        new_points = []
+        # decide mutation mode
+        micro_mode = random.random() < 0.3  # 30% chance of precision mutation
+
+        for (x, y) in new_polygon[1:]:
+            if random.random() < rate:
+                if micro_mode:
+                    # tiny refinement shift
+                    shift = 2
+                else:
+                    # normal cooling shift
+                    shift = max_shift
+
+                x += random.randint(-shift, shift)
+                y += random.randint(-shift, shift)
+
+            # clamp to image boundaries
+            x = max(0, min(200, x))
+            y = max(0, min(200, y))
+
+            new_points.append((x, y))
+
+        new_polygon[1:] = new_points
+        new_solution[idx] = new_polygon
+
+    elif chance < 0.7:
+        if len(new_solution) < 100:
+            new_solution.append(make_polygon())
+        elif new_solution:
+            new_solution.pop(random.randrange(len(new_solution)))
+
+    elif chance < 0.75:
+        if new_solution:
+            new_solution.pop(random.randrange(len(new_solution)))
         else:
-            solution.append(make_polygon())
+            new_solution.append(make_polygon())
 
     else:
-        # reorder polygons
-        new_solution = solution[:]
         random.shuffle(new_solution)
-        solution = new_solution
-    return solution
+
+    return new_solution
 
 
 def select(population):
-    subset1 = random.choices(population, k=5)
-    subset2 = random.choices(population, k=5)
 
-    highest1 = max(subset1, key=lambda x: x.fitness)
-    highest2 = max(subset2, key=lambda x: x.fitness)
+    # Stops identical parents
+    subset1 = random.sample(population, k=7)
+    parent1 = max(subset1, key=lambda x: x.fitness)
 
-    return [highest1, highest2]
+    remaining = [p for p in population if p != parent1]
+    subset2 = random.sample(remaining, k=7)
+    parent2 = max(subset2, key=lambda x: x.fitness)
+
+    return [parent1, parent2]
 
 
 def combine(*parents):
@@ -106,7 +143,9 @@ def draw(solution):
 
 
 def run():
-    TARGET, generations, pop_size, seed = menu()
+    global max_generations, current_generation
+
+    TARGET, max_generations, pop_size, seed = menu()
 
     random.seed(seed)
 
@@ -119,28 +158,25 @@ def run():
         return (MAX - count) / MAX  # Normalise to fitness value
 
     # initialization
-    population = Population.generate(initialise, evaluate, pop_size, maximize=True, concurrent_workers=4)
+    population = Population.generate(initialise, evaluate, pop_size, maximize=True, concurrent_workers=8)
     evolution = (Evolution().survive(fraction=0.5)
                  .breed(parent_picker=select, combiner=combine)
-                 .mutate(mutate_function=mutate, rate=0.1)
-                 .evaluate())
+                 .mutate(mutate_function=mutate, rate=0.1, elitist=True)
+                 .evaluate(lazy=True))
+    
+    for i in range(max_generations):
 
-    for i in range(generations):
-
-        total = 0
+        current_generation = i
 
         population = population.evolve(evolution)
 
-        for j in population:
-            total += j.fitness
-
+        total = sum(j.fitness for j in population)
         average = total / len(population)
 
-        population = population.evolve(evolution)
-
-        print("generation =", i, " best =", population.current_best.fitness, " worst =",
-
-              population.current_worst.fitness, "average=", average)
+        print("generation =", i,
+            "best =", population.current_best.fitness,
+            "worst =", population.current_worst.fitness,
+            "average =", average)
 
     best = population[0]
 
