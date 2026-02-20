@@ -4,7 +4,6 @@ from evol import Population, Evolution
 
 POLYGON_COUNT = 50
 MAX = 255 * 200 * 200
-TARGET = Image.open("8a.png")
 
 def menu():
 
@@ -97,15 +96,6 @@ def combine(*parents):
     return [a if random.random() < 0.5 else b for a, b in zip(*parents)]
 
 
-# Checks how close solution is to the target image
-def evaluate(solution):
-    image = draw(solution)
-    diff = ImageChops.difference(image, TARGET)  # Calculates pixel-wise absolute difference between images
-    hist = diff.convert("L").histogram()  # Converts to greyscale & histogram of pixel intensity
-    count = sum(i * n for i, n in enumerate(hist))  # Computes weighted sum of pixel differences
-    return (MAX - count) / MAX  # Normalise to fitness value
-
-
 # Creates solution image
 def draw(solution):
     image = Image.new("RGB", (200, 200))
@@ -119,6 +109,14 @@ def run():
     TARGET, generations, pop_size, seed = menu()
 
     random.seed(seed)
+
+    # Checks how close solution is to the target image
+    def evaluate(solution):
+        image = draw(solution)
+        diff = ImageChops.difference(image, TARGET)  # Calculates pixel-wise absolute difference between images
+        hist = diff.convert("L").histogram()  # Converts to greyscale & histogram of pixel intensity
+        count = sum(i * n for i, n in enumerate(hist))  # Computes weighted sum of pixel differences
+        return (MAX - count) / MAX  # Normalise to fitness value
 
     # initialization
     population = Population.generate(initialise, evaluate, pop_size, maximize=True, concurrent_workers=4)
